@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using CRMSystem.Domain.Entities;
 
-namespace CRM.Domain.Entities;
+namespace CRMSystem.Domain.Entities;
 
 public class Customer : BaseEntity
 {

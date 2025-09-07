@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using CRM.Domain.Entities;
 using CRMSystem.Domain.Entities;
 using CRMSystem.Domain.Enums;
+
+namespace CRMSystem.Domain.Entities;
 
 public class InvoiceItem : BaseEntity
 {
@@ -33,7 +34,18 @@ public class InvoiceItem : BaseEntity
     [MaxLength(1000)]
     public string Description { get; set; } = string.Empty;
 
-    [NotMapped]
+    // DueDate otomatik hesaplama - tek metod
+    public void CalculateDueDate()
+    {
+        DueDate = RenewalCycle switch
+        {
+            RenewalCycle.Monthly => StartDate.AddMonths(1),
+            RenewalCycle.Yearly => StartDate.AddYears(1),
+            RenewalCycle.None => DateTime.MaxValue, // Tek seferlik hizmetler için vade tarihi yok
+            _ => DateTime.MaxValue // Varsayılan olarak tek seferlik
+        };
+    }
+   
     public decimal TotalAmount => (Price * Quantity) * (1 + (VAT / 100));
 
     // Navigation

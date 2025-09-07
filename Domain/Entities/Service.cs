@@ -1,7 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using CRM.Domain.Entities;
-using CRMSystem.Domain.Entities;
 
 namespace CRMSystem.Domain.Entities;
 
