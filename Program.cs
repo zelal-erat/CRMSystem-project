@@ -1,5 +1,3 @@
-
-
 using CRMSystem.Infrastructure;
 using CRMSystem.Domain.Interfaces;
 using CRMSystem.Infrastructure.Repositories;
@@ -17,39 +15,41 @@ using CRMSystem.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1️⃣ DbContext
+// 1️⃣ DbContext (Env variable kullan)
+var connectionString = Environment.GetEnvironmentVariable("DEFAULT_CONNECTION")
+                       ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<CRMDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
 
 // 2️⃣ Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<CRMDbContext>()
     .AddDefaultTokenProviders();
 
-// 3️⃣ JWT Authentication
+// 3️⃣ JWT Authentication (Env variable kullan)
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-    .AddJwtBearer(options =>
-    {
-        var jwtSection = builder.Configuration.GetSection("Jwt");
-        var issuer = jwtSection["Issuer"];
-        var audience = jwtSection["Audience"];
-        var key = jwtSection["Key"]!;
+.AddJwtBearer(options =>
+{
+    var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? builder.Configuration["Jwt:Issuer"];
+    var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? builder.Configuration["Jwt:Audience"];
+    var key = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"];
 
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
-        };
-    });
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = issuer,
+        ValidAudience = audience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+    };
+});
 
 // 4️⃣ Controllers + Swagger
 builder.Services.AddControllers();
@@ -74,10 +74,7 @@ builder.Services.AddSwaggerGen(options =>
     options.AddSecurityDefinition("Bearer", securityScheme);
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        {
-            securityScheme,
-            new List<string>()
-        }
+        { securityScheme, new List<string>() }
     });
 });
 
@@ -99,27 +96,20 @@ builder.Services.AddScoped<CRMSystem.Domain.Services.IInvoiceDomainService, CRMS
 builder.Services.AddScoped<CRMSystem.Domain.Services.ICustomerDomainService, CRMSystem.Domain.Services.CustomerDomainService>();
 builder.Services.AddScoped<CRMSystem.Domain.Services.IServiceDomainService, CRMSystem.Domain.Services.ServiceDomainService>();
 
-// 9️⃣ Background Services & Email
-// Not: Bu servisler henüz implement edilmedi
-// builder.Services.AddScoped<CRMSystem.Domain.Services.IAdvancedRecurringService, CRMSystem.Domain.Services.AdvancedRecurringService>();
-// builder.Services.AddScoped<IEmailService, EmailService>();
-// builder.Services.AddHostedService<RecurringInvoiceBackgroundService>();
-
 // 🔟 Global Exception Handler
 builder.Services.AddTransient<GlobalExceptionHandler>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
-// 8️⃣ CORS
+// 9️⃣ CORS (Prod için frontend URL kullan)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy => policy
-            .WithOrigins("http://localhost:5173") // frontend portu
+            .WithOrigins(Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173")
             .AllowAnyHeader()
             .AllowAnyMethod()
     );
 });
-
 
 var app = builder.Build();
 
@@ -132,7 +122,7 @@ app.UseCors("AllowFrontend");
 // Global Exception Handler
 app.UseMiddleware<GlobalExceptionHandler>();
 
-app.UseAuthentication();   // ❗ olmalı
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -142,22 +132,29 @@ using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-    string[] roles = ["Admin", "Staff"];
+
+    string[] roles = { "Admin", "Staff" };
     foreach (var role in roles)
     {
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
     }
-    var adminSection = builder.Configuration.GetSection("AdminUser");
-    var adminEmail = adminSection["Email"];
-    var adminPassword = adminSection["Password"];
-    var adminFullName = adminSection["FullName"];    
+
+    var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
+    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
+    var adminFullName = Environment.GetEnvironmentVariable("ADMIN_FULLNAME") ?? "Admin";
+
     if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
     {
         var admin = await userManager.FindByEmailAsync(adminEmail);
-        if (admin is null)
+        if (admin == null)
         {
-            admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, FullName = adminFullName ?? "Admin" };
+            admin = new ApplicationUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                FullName = adminFullName
+            };
             var createResult = await userManager.CreateAsync(admin, adminPassword);
             if (createResult.Succeeded)
             {
@@ -171,4 +168,5 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
+
 app.Run();
