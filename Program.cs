@@ -1,21 +1,6 @@
-using CRMSystem.Infrastructure;
-using CRMSystem.Domain.Interfaces;
-using CRMSystem.Infrastructure.Repositories;
-using CRMSystem.Application.Common;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using MediatR;
-using FluentValidation;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
-using System.Text;
-using CRMSystem.Application.Common.Interfaces;
-using CRMSystem.Infrastructure.Services;
-
 var builder = WebApplication.CreateBuilder(args);
 
-// 1️⃣ DbContext (Env variable kullan)
+// 1️⃣ DB Context (Render env variable kullan)
 var connectionString = Environment.GetEnvironmentVariable("DEFAULT_CONNECTION")
                        ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -27,7 +12,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<CRMDbContext>()
     .AddDefaultTokenProviders();
 
-// 3️⃣ JWT Authentication (Env variable kullan)
+// 3️⃣ JWT Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -38,6 +23,9 @@ builder.Services.AddAuthentication(options =>
     var issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? builder.Configuration["Jwt:Issuer"];
     var audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? builder.Configuration["Jwt:Audience"];
     var key = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"];
+
+    if (string.IsNullOrWhiteSpace(key))
+        throw new Exception("JWT_KEY environment variable is missing!");
 
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -54,29 +42,7 @@ builder.Services.AddAuthentication(options =>
 // 4️⃣ Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "CRMSystem API", Version = "v1" });
-    var securityScheme = new OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Description = "Bearer {token}",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = JwtBearerDefaults.AuthenticationScheme,
-        BearerFormat = "JWT",
-        Reference = new OpenApiReference
-        {
-            Type = ReferenceType.SecurityScheme,
-            Id = "Bearer"
-        }
-    };
-    options.AddSecurityDefinition("Bearer", securityScheme);
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        { securityScheme, new List<string>() }
-    });
-});
+builder.Services.AddSwaggerGen();
 
 // 5️⃣ Repository Pattern
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
@@ -92,23 +58,18 @@ builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddAutoMapper(typeof(Program).Assembly);
 
 // 8️⃣ Domain Services
-builder.Services.AddScoped<CRMSystem.Domain.Services.IInvoiceDomainService, CRMSystem.Domain.Services.InvoiceDomainService>();
-builder.Services.AddScoped<CRMSystem.Domain.Services.ICustomerDomainService, CRMSystem.Domain.Services.CustomerDomainService>();
-builder.Services.AddScoped<CRMSystem.Domain.Services.IServiceDomainService, CRMSystem.Domain.Services.ServiceDomainService>();
+builder.Services.AddScoped<IInvoiceDomainService, InvoiceDomainService>();
+builder.Services.AddScoped<ICustomerDomainService, CustomerDomainService>();
+builder.Services.AddScoped<IServiceDomainService, ServiceDomainService>();
 
-// 🔟 Global Exception Handler
-builder.Services.AddTransient<GlobalExceptionHandler>();
-builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-
-// 9️⃣ CORS (Prod için frontend URL kullan)
+// 9️⃣ CORS (Render frontend URL)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend",
-        policy => policy
-            .WithOrigins(Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-    );
+    var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173";
+    options.AddPolicy("AllowFrontend", policy =>
+        policy.WithOrigins(frontendUrl)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 var app = builder.Build();
@@ -118,56 +79,47 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.UseRouting();
 app.UseCors("AllowFrontend");
-
-// Global Exception Handler
-app.UseMiddleware<GlobalExceptionHandler>();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
-
-// Seed default roles and admin user
+// 10️⃣ Admin Seed (try-catch ile güvenli)
 using (var scope = app.Services.CreateScope())
 {
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-
-    string[] roles = { "Admin", "Staff" };
-    foreach (var role in roles)
+    try
     {
-        if (!await roleManager.RoleExistsAsync(role))
-            await roleManager.CreateAsync(new IdentityRole(role));
-    }
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-    var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
-    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
-    var adminFullName = Environment.GetEnvironmentVariable("ADMIN_FULLNAME") ?? "Admin";
+        string[] roles = { "Admin", "Staff" };
+        foreach (var role in roles)
+            if (!await roleManager.RoleExistsAsync(role))
+                await roleManager.CreateAsync(new IdentityRole(role));
 
-    if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
-    {
-        var admin = await userManager.FindByEmailAsync(adminEmail);
-        if (admin == null)
+        var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
+        var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
+        var adminFullName = Environment.GetEnvironmentVariable("ADMIN_FULLNAME") ?? "Admin";
+
+        if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {
-            admin = new ApplicationUser
+            var admin = await userManager.FindByEmailAsync(adminEmail);
+            if (admin == null)
             {
-                UserName = adminEmail,
-                Email = adminEmail,
-                FullName = adminFullName
-            };
-            var createResult = await userManager.CreateAsync(admin, adminPassword);
-            if (createResult.Succeeded)
-            {
-                if (!await userManager.IsInRoleAsync(admin, "Admin"))
+                admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, FullName = adminFullName };
+                var createResult = await userManager.CreateAsync(admin, adminPassword);
+                if (createResult.Succeeded)
                     await userManager.AddToRoleAsync(admin, "Admin");
             }
         }
-        else if (!await userManager.IsInRoleAsync(admin, "Admin"))
-        {
-            await userManager.AddToRoleAsync(admin, "Admin");
-        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Admin seed failed: {ex.Message}");
     }
 }
 
-app.Urls.Add("http://0.0.0.0:5258");
+// 11️⃣ Port ayarı (Render kullanımı)
+var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
+app.Urls.Add($"http://0.0.0.0:{port}");
+
+app.MapControllers();
 app.Run();

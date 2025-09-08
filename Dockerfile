@@ -1,22 +1,25 @@
-# 1. Build aşaması
+# 1️⃣ Build aşaması
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-WORKDIR /app
+WORKDIR /src
 
-# Proje dosyalarını kopyala ve restore et
-COPY *.csproj ./
+# Solution ve proje dosyalarını kopyala
+COPY *.sln ./
+COPY CRMSystem/*.csproj ./CRMSystem/
 RUN dotnet restore
 
 # Tüm dosyaları kopyala ve publish et
-COPY . ./
-RUN dotnet publish -c Release -o out
+COPY . .
+WORKDIR /src/CRMSystem
+RUN dotnet publish -c Release -o /app/out
 
-# 2. Runtime aşaması
+# 2️⃣ Runtime aşaması
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
-COPY --from=build /app/out .
+COPY --from=build /app/out ./
 
-# Projenin çalışacağı portu aç
-EXPOSE 5258
+# Render ve genel PaaS platformları portu 80 bekler
+EXPOSE 80
+ENV ASPNETCORE_URLS=http://+:80
 
-# Projeyi çalıştır
+# Uygulamayı çalıştır
 ENTRYPOINT ["dotnet", "CRMSystem.dll"]
