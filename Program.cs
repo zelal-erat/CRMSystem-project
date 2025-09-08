@@ -1,3 +1,16 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using FluentValidation;
+using CRMSystem.Infrastructure;
+using CRMSystem.Domain.Entities;
+using CRMSystem.Domain.Interfaces;
+using CRMSystem.Infrastructure.Repositories;
+using CRMSystem.Application.Validators;
+using CRMSystem.Domain.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1️⃣ DB Context (Render env variable kullan)

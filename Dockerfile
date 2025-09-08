@@ -4,13 +4,12 @@ WORKDIR /src
 
 # Solution ve proje dosyalarını kopyala
 COPY *.sln ./
-COPY CRMSystem/*.csproj ./CRMSystem/
+COPY *.csproj ./
 RUN dotnet restore
 
 # Tüm dosyaları kopyala ve publish et
 COPY . .
-WORKDIR /src/CRMSystem
-RUN dotnet publish -c Release -o /app/out
+RUN dotnet publish CRMSystem.csproj -c Release -o /app/out
 
 # 2️⃣ Runtime aşaması
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
