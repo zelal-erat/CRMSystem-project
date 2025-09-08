@@ -25,24 +25,14 @@ public class UpdateCustomerCommandHandler : IRequestHandler<UpdateCustomerComman
 
     public async Task<Result<CustomerDto>> Handle(UpdateCustomerCommand request, CancellationToken cancellationToken)
     {
-        // Domain Service kullanarak customer güncelle
-        var updateRequest = new UpdateCustomerRequest
-        {
-            FullName = request.Customer.FullName,
-            Email = request.Customer.Email,
-            Phone = request.Customer.Phone,
-            TaxOffice = request.Customer.TaxOffice,
-            TaxNumber = request.Customer.TaxNumber,
-            Address = request.Customer.Address,
-            Description = request.Customer.Description
-        };
+        // AutoMapper ile DTO'yu Domain Request'e çevir
+        var updateRequest = _mapper.Map<UpdateCustomerRequest>(request.Customer);
 
         var customerResult = await _customerDomainService.UpdateCustomerAsync(request.Id, updateRequest);
 
         if (!customerResult.IsSuccess)
             return Result<CustomerDto>.Failure(customerResult.Error);
 
-        var dto = _mapper.Map<CustomerDto>(customerResult.Data);
-        return Result<CustomerDto>.Success(dto);
+        return Result<CustomerDto>.Success(_mapper.Map<CustomerDto>(customerResult.Data));
     }
 }

@@ -1,5 +1,6 @@
 using CRMSystem.Domain.Entities;
 using CRMSystem.Domain.Enums;
+using System.Linq.Expressions;
 
 namespace CRMSystem.Domain.Interfaces;
 
@@ -20,4 +21,9 @@ public interface IInvoiceRepository : IGenericRepository<Invoice>
     Task<bool> HasServiceInActiveInvoicesAsync(int serviceId);
     Task<IEnumerable<InvoiceItem>> GetRecurringItemsAsync();
     Task<IEnumerable<Invoice>> GetInvoicesByDateRangeAsync(DateTime startDate, DateTime endDate);
+    
+    // Search metodları - sadece müşteri adıyla
+    Task<IEnumerable<Invoice>> SearchInvoicesByCustomerNameAsync(string customerName);
+    Task<IEnumerable<Invoice>> GetPagedInvoicesAsync(int pageNumber, int pageSize, Expression<Func<Invoice, bool>>? predicate = null);
+    Task<int> CountInvoicesAsync(Expression<Func<Invoice, bool>>? predicate = null);
 }

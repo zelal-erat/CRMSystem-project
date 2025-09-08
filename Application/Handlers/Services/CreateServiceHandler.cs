@@ -23,21 +23,15 @@ public class CreateServiceHandler : IRequestHandler<CreateServiceCommand, Result
 
     public async Task<Result<ServiceDto>> Handle(CreateServiceCommand request, CancellationToken cancellationToken)
     {
-        // Domain Service kullanarak service oluştur
-        var createRequest = new CreateServiceRequest
-        {
-            Name = request.Service.Name,
-            Price = request.Service.Price,
-            Description = request.Service.Description
-        };
+        // AutoMapper ile DTO'yu Domain Request'e çevir
+        var createRequest = _mapper.Map<CreateServiceRequest>(request.Service);
 
         var serviceResult = await _serviceDomainService.CreateServiceAsync(createRequest);
         
         if (!serviceResult.IsSuccess)
             return Result<ServiceDto>.Failure(serviceResult.Error);
         
-        var serviceDto = _mapper.Map<ServiceDto>(serviceResult.Data);
-        return Result<ServiceDto>.Success(serviceDto);
+        return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(serviceResult.Data));
     }
 }
  

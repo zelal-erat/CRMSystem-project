@@ -2,6 +2,7 @@ using CRMSystem.Domain.Entities;
 using CRMSystem.Domain.Enums;
 using CRMSystem.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace CRMSystem.Infrastructure.Repositories;
 
@@ -144,5 +145,50 @@ public class InvoiceRepository : GenericRepository<Invoice>, IInvoiceRepository
             .Include(i => i.Items.Where(item => !item.IsDeleted))
             .Include(i => i.Customer)
             .ToListAsync();
+    }
+
+    // Search metodları - sadece müşteri adıyla
+    public async Task<IEnumerable<Invoice>> SearchInvoicesByCustomerNameAsync(string customerName)
+    {
+        var customerNameLower = customerName.ToLower();
+        
+        return await _dbSet
+            .Where(i => !i.IsDeleted && 
+                       i.Customer.FullName.ToLower().Contains(customerNameLower))
+            .Include(i => i.Items.Where(item => !item.IsDeleted))
+            .Include(i => i.Customer)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Invoice>> GetPagedInvoicesAsync(int pageNumber, int pageSize, Expression<Func<Invoice, bool>>? predicate = null)
+    {
+        var query = _dbSet
+            .Where(i => !i.IsDeleted)
+            .Include(i => i.Items.Where(item => !item.IsDeleted))
+            .Include(i => i.Customer)
+            .AsQueryable();
+
+        if (predicate != null)
+        {
+            query = query.Where(predicate);
+        }
+
+        return await query
+            .OrderByDescending(i => i.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
+
+    public async Task<int> CountInvoicesAsync(Expression<Func<Invoice, bool>>? predicate = null)
+    {
+        var query = _dbSet.Where(i => !i.IsDeleted).AsQueryable();
+
+        if (predicate != null)
+        {
+            query = query.Where(predicate);
+        }
+
+        return await query.CountAsync();
     }
 }

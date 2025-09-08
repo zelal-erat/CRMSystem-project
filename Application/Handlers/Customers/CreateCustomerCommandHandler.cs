@@ -24,24 +24,14 @@ public class CreateCustomerCommandHandler : IRequestHandler<CRMSystem.Applicatio
 
     public async Task<Result<CustomerDto>> Handle(CRMSystem.Application.Commands.Customers.CreateCustomerCommand request, CancellationToken cancellationToken)
     {
-        // Domain Service kullanarak customer oluştur
-        var createRequest = new CreateCustomerRequest
-        {
-            FullName = request.Customer.FullName,
-            Email = request.Customer.Email,
-            Phone = request.Customer.Phone,
-            TaxOffice = request.Customer.TaxOffice,
-            TaxNumber = request.Customer.TaxNumber,
-            Address = request.Customer.Address,
-            Description = request.Customer.Description
-        };
+        // AutoMapper ile DTO'yu Domain Request'e çevir
+        var createRequest = _mapper.Map<CreateCustomerRequest>(request.Customer);
 
         var customerResult = await _customerDomainService.CreateCustomerAsync(createRequest);
 
         if (!customerResult.IsSuccess)
             return Result<CustomerDto>.Failure(customerResult.Error);
 
-        var dto = _mapper.Map<CustomerDto>(customerResult.Data);
-        return Result<CustomerDto>.Success(dto);
+        return Result<CustomerDto>.Success(_mapper.Map<CustomerDto>(customerResult.Data));
     }
 }

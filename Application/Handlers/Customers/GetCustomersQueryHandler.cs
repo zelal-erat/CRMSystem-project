@@ -36,16 +36,7 @@ public class GetCustomersQueryHandler : IRequestHandler<CRMSystem.Application.Qu
 
         var dtoItems = _mapper.Map<List<CustomerDto>>(items);
 
-        var result = new PaginatedResultDto<CustomerDto>
-        {
-            Items = dtoItems,
-            TotalCount = total,
-            PageNumber = request.PageNumber,
-            PageSize = request.PageSize,
-            TotalPages = (int)Math.Ceiling((double)total / request.PageSize),
-            HasPreviousPage = request.PageNumber > 1,
-            HasNextPage = request.PageNumber * request.PageSize < total
-        };
+        var result = PaginatedResultDto<CustomerDto>.Create(dtoItems, total, request.PageNumber, request.PageSize);
 
         return Result<PaginatedResultDto<CustomerDto>>.Success(result);
     }

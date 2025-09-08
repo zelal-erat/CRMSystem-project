@@ -34,6 +34,21 @@ public class InvoicesController : ControllerBase
         return Ok(new { Success = true, Data = result.Data });
     }
 
+    // ✅ Faturaları ara (sadece müşteri adıyla)
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? customerName,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var result = await _mediator.Send(new SearchInvoicesQuery(customerName, pageNumber, pageSize));
+        
+        if (!result.IsSuccess)
+            return BadRequest(new { Success = false, Message = result.Error });
+
+        return Ok(new { Success = true, Data = result.Data });
+    }
+
     // ✅ Id ile fatura getir
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)

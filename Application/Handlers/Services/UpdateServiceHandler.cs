@@ -23,21 +23,15 @@ public class UpdateServiceHandler : IRequestHandler<UpdateServiceCommand, Result
 
     public async Task<Result<ServiceDto>> Handle(UpdateServiceCommand request, CancellationToken cancellationToken)
     {
-        // Domain Service kullanarak service güncelle
-        var updateRequest = new UpdateServiceRequest
-        {
-            Name = request.Service.Name,
-            Price = request.Service.Price,
-            Description = request.Service.Description
-        };
+        // AutoMapper ile DTO'yu Domain Request'e çevir
+        var updateRequest = _mapper.Map<UpdateServiceRequest>(request.Service);
 
         var serviceResult = await _serviceDomainService.UpdateServiceAsync(request.Service.Id, updateRequest);
 
         if (!serviceResult.IsSuccess)
             return Result<ServiceDto>.Failure(serviceResult.Error);
 
-        var dto = _mapper.Map<ServiceDto>(serviceResult.Data);
-        return Result<ServiceDto>.Success(dto);
+        return Result<ServiceDto>.Success(_mapper.Map<ServiceDto>(serviceResult.Data));
     }
 }
 

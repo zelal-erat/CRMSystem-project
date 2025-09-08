@@ -1,3 +1,5 @@
+
+
 using CRMSystem.Infrastructure;
 using CRMSystem.Domain.Interfaces;
 using CRMSystem.Infrastructure.Repositories;
@@ -15,10 +17,9 @@ using CRMSystem.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1️⃣ DbContext - environment variable'dan al
-var connectionString = builder.Configuration["CONNECTIONSTRINGS_DEFAULTCONNECTION"];
+// 1️⃣ DbContext
 builder.Services.AddDbContext<CRMDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 2️⃣ Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -26,35 +27,36 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddDefaultTokenProviders();
 
 // 3️⃣ JWT Authentication
-var jwtKey = builder.Configuration["JWT_KEY"];
-var jwtIssuer = builder.Configuration["JWT_ISSUER"] ?? "CRMSystem";
-var jwtAudience = builder.Configuration["JWT_AUDIENCE"] ?? "CRMSystemClient";
-
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
-    };
-});
+        var jwtSection = builder.Configuration.GetSection("Jwt");
+        var issuer = jwtSection["Issuer"];
+        var audience = jwtSection["Audience"];
+        var key = jwtSection["Key"]!;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+        };
+    });
 
 // 4️⃣ Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddSwaggerGen(options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "CRMSystem API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "CRMSystem API", Version = "v1" });
     var securityScheme = new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -63,12 +65,19 @@ builder.Services.AddSwaggerGen(c =>
         Type = SecuritySchemeType.Http,
         Scheme = JwtBearerDefaults.AuthenticationScheme,
         BearerFormat = "JWT",
-        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+        Reference = new OpenApiReference
+        {
+            Type = ReferenceType.SecurityScheme,
+            Id = "Bearer"
+        }
     };
-    c.AddSecurityDefinition("Bearer", securityScheme);
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    options.AddSecurityDefinition("Bearer", securityScheme);
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
-        { securityScheme, new List<string>() }
+        {
+            securityScheme,
+            new List<string>()
+        }
     });
 });
 
@@ -90,21 +99,27 @@ builder.Services.AddScoped<CRMSystem.Domain.Services.IInvoiceDomainService, CRMS
 builder.Services.AddScoped<CRMSystem.Domain.Services.ICustomerDomainService, CRMSystem.Domain.Services.CustomerDomainService>();
 builder.Services.AddScoped<CRMSystem.Domain.Services.IServiceDomainService, CRMSystem.Domain.Services.ServiceDomainService>();
 
+// 9️⃣ Background Services & Email
+// Not: Bu servisler henüz implement edilmedi
+// builder.Services.AddScoped<CRMSystem.Domain.Services.IAdvancedRecurringService, CRMSystem.Domain.Services.AdvancedRecurringService>();
+// builder.Services.AddScoped<IEmailService, EmailService>();
+// builder.Services.AddHostedService<RecurringInvoiceBackgroundService>();
+
 // 🔟 Global Exception Handler
 builder.Services.AddTransient<GlobalExceptionHandler>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 
-// 9️⃣ CORS
-var frontendUrl = builder.Configuration["FRONTEND_URL"] ?? "http://localhost:5173";
+// 8️⃣ CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy => policy
-            .WithOrigins(frontendUrl)
+            .WithOrigins("http://localhost:5173") // frontend portu
             .AllowAnyHeader()
             .AllowAnyMethod()
     );
 });
+
 
 var app = builder.Build();
 
@@ -113,9 +128,13 @@ app.UseSwagger();
 app.UseSwaggerUI();
 app.UseRouting();
 app.UseCors("AllowFrontend");
+
+// Global Exception Handler
 app.UseMiddleware<GlobalExceptionHandler>();
-app.UseAuthentication();
+
+app.UseAuthentication();   // ❗ olmalı
 app.UseAuthorization();
+
 app.MapControllers();
 
 // Seed default roles and admin user
@@ -123,27 +142,28 @@ using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-
-    string[] roles = { "Admin", "Staff" };
+    string[] roles = ["Admin", "Staff"];
     foreach (var role in roles)
     {
         if (!await roleManager.RoleExistsAsync(role))
             await roleManager.CreateAsync(new IdentityRole(role));
     }
-
-    var adminEmail = builder.Configuration["ADMIN_EMAIL"];
-    var adminPassword = builder.Configuration["ADMIN_PASSWORD"];
-    var adminFullName = builder.Configuration["ADMIN_FULLNAME"] ?? "Admin";
-
+    var adminSection = builder.Configuration.GetSection("AdminUser");
+    var adminEmail = adminSection["Email"];
+    var adminPassword = adminSection["Password"];
+    var adminFullName = adminSection["FullName"];    
     if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
     {
         var admin = await userManager.FindByEmailAsync(adminEmail);
-        if (admin == null)
+        if (admin is null)
         {
-            admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, FullName = adminFullName };
+            admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, FullName = adminFullName ?? "Admin" };
             var createResult = await userManager.CreateAsync(admin, adminPassword);
-            if (createResult.Succeeded && !await userManager.IsInRoleAsync(admin, "Admin"))
-                await userManager.AddToRoleAsync(admin, "Admin");
+            if (createResult.Succeeded)
+            {
+                if (!await userManager.IsInRoleAsync(admin, "Admin"))
+                    await userManager.AddToRoleAsync(admin, "Admin");
+            }
         }
         else if (!await userManager.IsInRoleAsync(admin, "Admin"))
         {
@@ -151,5 +171,4 @@ using (var scope = app.Services.CreateScope())
         }
     }
 }
-
 app.Run();
