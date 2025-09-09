@@ -16,8 +16,10 @@ using CRMSystem.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1️⃣ DB Context (Render env variable kullan)
-var connectionString = Environment.GetEnvironmentVariable("DEFAULT_CONNECTION")
+// Program.cs
+var connectionString = Environment.GetEnvironmentVariable("CONNECTIONSTRINGS__DEFAULTCONNECTION")
                        ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
 
 builder.Services.AddDbContext<CRMDbContext>(options =>
     options.UseNpgsql(connectionString));
