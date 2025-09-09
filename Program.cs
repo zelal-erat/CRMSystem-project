@@ -100,31 +100,11 @@ using (var scope = app.Services.CreateScope())
         var context = scope.ServiceProvider.GetRequiredService<CRMDbContext>();
         await context.Database.MigrateAsync();
         Console.WriteLine("Database migration completed successfully.");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Database migration failed: {ex.Message}");
-        Console.WriteLine($"Stack trace: {ex.StackTrace}");
-    }
-}
-
-// Middleware
-app.UseSwagger();
-app.UseSwaggerUI();
-app.UseRouting();
-app.UseCors("AllowFrontend");
-app.UseAuthentication();
-app.UseAuthorization();
-
-// 10️⃣ Admin Seed (try-catch ile güvenli)
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
+        
+        // Migration'dan sonra admin seed yap
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-       
         string[] roles = { "Admin", "Staff" };
         foreach (var role in roles)
         {
@@ -176,10 +156,18 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Admin seed failed: {ex.Message}");
+        Console.WriteLine($"Database migration or admin seed failed: {ex.Message}");
         Console.WriteLine($"Stack trace: {ex.StackTrace}");
     }
 }
+
+// Middleware
+app.UseSwagger();
+app.UseSwaggerUI();
+app.UseRouting();
+app.UseCors("AllowFrontend");
+app.UseAuthentication();
+app.UseAuthorization();
 
 // 11️⃣ Port ayarı (Render kullanımı)
 var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
