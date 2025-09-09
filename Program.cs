@@ -10,6 +10,8 @@ using CRMSystem.Domain.Interfaces;
 using CRMSystem.Infrastructure.Repositories;
 using CRMSystem.Application.Validators;
 using CRMSystem.Domain.Services;
+using CRMSystem.Application.Common.Interfaces;
+using CRMSystem.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -75,6 +77,9 @@ builder.Services.AddScoped<IInvoiceDomainService, InvoiceDomainService>();
 builder.Services.AddScoped<ICustomerDomainService, CustomerDomainService>();
 builder.Services.AddScoped<IServiceDomainService, ServiceDomainService>();
 
+// 9️⃣ JWT Service
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+
 // 9️⃣ CORS (Render frontend URL)
 builder.Services.AddCors(options =>
 {
@@ -86,6 +91,20 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Database Migration (Render için)
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<CRMDbContext>();
+        context.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Database migration failed: {ex.Message}");
+    }
+}
 
 // Middleware
 app.UseSwagger();
@@ -135,4 +154,4 @@ var port = Environment.GetEnvironmentVariable("PORT") ?? "80";
 app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.MapControllers();
-app.Run();
+await app.RunAsync();
