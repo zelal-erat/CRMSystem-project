@@ -98,11 +98,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<CRMDbContext>();
-        context.Database.Migrate();
+        await context.Database.MigrateAsync();
+        Console.WriteLine("Database migration completed successfully.");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Database migration failed: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
     }
 }
 
@@ -122,11 +124,25 @@ using (var scope = app.Services.CreateScope())
         var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
+       
         string[] roles = { "Admin", "Staff" };
         foreach (var role in roles)
+        {
             if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new IdentityRole(role));
+            {
+                var result = await roleManager.CreateAsync(new IdentityRole(role));
+                if (result.Succeeded)
+                    Console.WriteLine($"Role '{role}' created successfully.");
+                else
+                    Console.WriteLine($"Failed to create role '{role}': {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+            else
+            {
+                Console.WriteLine($"Role '{role}' already exists.");
+            }
+        }
 
+        // Admin kullanıcısını oluştur
         var adminEmail = Environment.GetEnvironmentVariable("ADMIN_EMAIL");
         var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD");
         var adminFullName = Environment.GetEnvironmentVariable("ADMIN_FULLNAME") ?? "Admin";
@@ -139,13 +155,29 @@ using (var scope = app.Services.CreateScope())
                 admin = new ApplicationUser { UserName = adminEmail, Email = adminEmail, FullName = adminFullName };
                 var createResult = await userManager.CreateAsync(admin, adminPassword);
                 if (createResult.Succeeded)
+                {
                     await userManager.AddToRoleAsync(admin, "Admin");
+                    Console.WriteLine($"Admin user '{adminEmail}' created successfully.");
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to create admin user: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
+                }
             }
+            else
+            {
+                Console.WriteLine($"Admin user '{adminEmail}' already exists.");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Admin credentials not provided in environment variables.");
         }
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Admin seed failed: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
     }
 }
 
