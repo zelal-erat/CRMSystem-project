@@ -44,7 +44,7 @@ namespace CRMSystem.Migrations
                 table: "Customers",
                 column: "TaxNumber",
                 unique: true,
-                filter: "[TaxNumber] IS NOT NULL AND [TaxNumber] != ''");
+                filter: "\"TaxNumber\" IS NOT NULL AND \"TaxNumber\" != ''");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_InvoiceItems_Services_ServiceId",
